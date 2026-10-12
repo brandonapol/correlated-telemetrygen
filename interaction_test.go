@@ -23,8 +23,8 @@ type logRecorder struct {
 }
 
 func (r *logRecorder) Enabled(context.Context, sdklog.EnabledParameters) bool { return true }
-func (r *logRecorder) Shutdown(context.Context) error                        { return nil }
-func (r *logRecorder) ForceFlush(context.Context) error                      { return nil }
+func (r *logRecorder) Shutdown(context.Context) error                         { return nil }
+func (r *logRecorder) ForceFlush(context.Context) error                       { return nil }
 func (r *logRecorder) OnEmit(_ context.Context, rec *sdklog.Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
