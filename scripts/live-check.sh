@@ -5,7 +5,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-WEAVER_IMAGE=${WEAVER_IMAGE:-otel/weaver:v0.27.0}
+WEAVER_IMAGE=${WEAVER_IMAGE:-otel/weaver:v0.27.0@sha256:3049b4079049d4abb1b5632f511ada2c33505a1c60f3f8535e93f87f0696f056}
 REPORT_DIR=${REPORT_DIR:-live-check-report}
 DURATION=${DURATION:-10s}
 mkdir -p "$REPORT_DIR"

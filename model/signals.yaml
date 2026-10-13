@@ -19,7 +19,7 @@ spans:
 
   - type: shop.web.fetch
     name:
-      note: The HTTP method, as the browser SDK's fetch instrumentation names it.
+      note: "`{http.request.method} {url.template}`."
     kind: client
     brief: A request from the browser to the shop's API.
     stability: development
@@ -28,6 +28,8 @@ spans:
       - ref: http.request.method
         requirement_level: required
       - ref: url.full
+        requirement_level: required
+      - ref: url.template
         requirement_level: required
       - ref: server.address
         requirement_level: required
@@ -127,7 +129,7 @@ spans:
 
   - type: shop.db.client
     name:
-      note: "`db.query.summary`, or for Redis `db.operation.name`."
+      note: "`db.query.summary`."
     kind: client
     brief: A statement or command sent to Postgres or Redis.
     stability: development
@@ -149,8 +151,7 @@ spans:
         requirement_level:
           conditionally_required: If the statement operates on one table.
       - ref: db.query.summary
-        requirement_level:
-          conditionally_required: If the database is Postgres.
+        requirement_level: required
       - ref: db.response.returned_rows
         requirement_level:
           conditionally_required: If the statement is a SELECT that succeeded.

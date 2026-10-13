@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	otellog "go.opentelemetry.io/otel/log"
@@ -119,16 +120,29 @@ loop:
 	log.Printf("sent %d interactions", sent)
 }
 
-// newOTLPInstance builds a tracer and a logger that share one resource and export over OTLP
-// gRPC. The resource attributes include telemetry.sdk.*, because the web front end reports the
-// browser SDK rather than this one. OTEL_RESOURCE_ATTRIBUTES is applied last, so it overrides
-// the simulated attributes.
-func newOTLPInstance(ctx context.Context, r replica) (instance, func(context.Context) error, error) {
-	res, err := resource.New(ctx,
+// instanceResource is the resource of one simulated instance. Its attributes include
+// telemetry.sdk.*, because the web front end reports the browser SDK rather than this one.
+// OTEL_RESOURCE_ATTRIBUTES is applied after the simulated attributes, so it overrides them,
+// except for service.name: the env detector also reads OTEL_SERVICE_NAME, which would give
+// every simulated service one name.
+func instanceResource(ctx context.Context, attrs []attribute.KeyValue) (*resource.Resource, error) {
+	var name []attribute.KeyValue
+	for _, kv := range attrs {
+		if kv.Key == "service.name" {
+			name = append(name, kv)
+		}
+	}
+	return resource.New(ctx,
 		resource.WithSchemaURL(schemaURL),
-		resource.WithAttributes(r.resource...),
+		resource.WithAttributes(attrs...),
 		resource.WithFromEnv(),
+		resource.WithAttributes(name...),
 	)
+}
+
+// newOTLPInstance builds a tracer and a logger that share one resource and export over OTLP gRPC.
+func newOTLPInstance(ctx context.Context, r replica) (instance, func(context.Context) error, error) {
+	res, err := instanceResource(ctx, r.resource)
 	if err != nil {
 		return instance{}, nil, err
 	}

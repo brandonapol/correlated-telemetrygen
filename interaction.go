@@ -190,10 +190,11 @@ func (s *simulator) run(ctx context.Context, start time.Time) {
 	s.log(ctx, web, c.advance(time.Millisecond), otellog.SeverityInfo, "checkout submitted",
 		append(req.sessionAttrs(), attribute.String("user.id", req.userID), attribute.Int("shop.cart.item_count", req.items))...)
 
-	fctx, fetch := web.tracer.Start(ctx, "POST", trace.WithSpanKind(trace.SpanKindClient),
+	fctx, fetch := web.tracer.Start(ctx, "POST /api/v1/checkout", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithTimestamp(c.now), trace.WithAttributes(append(req.sessionAttrs(),
 			attribute.String("http.request.method", "POST"),
 			attribute.String("url.full", "https://shop.example.com/api/v1/checkout"),
+			attribute.String("url.template", "/api/v1/checkout"),
 			attribute.String("server.address", "shop.example.com"),
 			attribute.Int("server.port", 443),
 		)...))
@@ -286,12 +287,13 @@ func (s *simulator) handleCheckout(ctx context.Context, c *clock, req request) c
 		)...)
 
 	cacheHit := s.rng.Float64() < 0.8
-	_, cache := checkout.tracer.Start(ctx, "GET", trace.WithSpanKind(trace.SpanKindClient),
+	_, cache := checkout.tracer.Start(ctx, "GET cart", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithTimestamp(c.now), trace.WithAttributes(
 			attribute.String("db.system.name", "redis"),
 			attribute.String("db.operation.name", "GET"),
 			attribute.String("db.namespace", "0"),
 			attribute.String("db.query.text", "GET cart:"+req.userID),
+			attribute.String("db.query.summary", "GET cart"),
 			attribute.String("server.address", "redis."+s.namespace+".svc.cluster.local"),
 			attribute.Int("server.port", 6379),
 			attribute.Bool("cache.hit", cacheHit),

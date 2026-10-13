@@ -16,7 +16,7 @@ web       INTERNAL  click                                    log: checkout submi
 web       CLIENT      POST  -> checkout
 checkout  SERVER        POST /api/v1/checkout                log: checkout started
                                                              event: feature_flag.evaluation (new-checkout-flow)
-checkout  CLIENT          GET                                (redis: the cart, cache.hit)
+checkout  CLIENT          GET cart                           (redis: the cart, cache.hit)
 checkout  CLIENT          SELECT shop.inventory ...          (postgresql: 3–5 statements ending in INSERT shop.orders)
 checkout  CLIENT          POST  -> payments
 payments  SERVER            POST /api/v1/charge              log: authorizing payment

@@ -201,6 +201,12 @@ func TestCheckoutServerSpanIsAChildOfTheBrowsersFetch(t *testing.T) {
 		if !ok || serviceOf(parent.Resource()) != "web" || parent.SpanKind() != trace.SpanKindClient {
 			t.Fatalf("checkout server span's parent is not a web client span")
 		}
+		if parent.Name() != "POST /api/v1/checkout" {
+			t.Fatalf("the browser's fetch span is named %q, want %q", parent.Name(), "POST /api/v1/checkout")
+		}
+		if template, _ := spanAttr(parent, "url.template"); template.AsString() != "/api/v1/checkout" {
+			t.Fatalf("the browser's fetch span has url.template %q", template.AsString())
+		}
 		if parent.StartTime().After(s.StartTime()) || parent.EndTime().Before(s.EndTime()) {
 			t.Fatalf("the browser's fetch [%s, %s] does not contain the checkout server span [%s, %s]",
 				parent.StartTime(), parent.EndTime(), s.StartTime(), s.EndTime())
@@ -438,14 +444,14 @@ func TestDatabaseSpansSayWhereAndWhat(t *testing.T) {
 		if !ok {
 			continue
 		}
-		required := []attribute.Key{"server.address", "server.port", "db.operation.name", "db.query.text", "db.namespace"}
+		required := []attribute.Key{"server.address", "server.port", "db.operation.name", "db.query.text", "db.query.summary", "db.namespace"}
+		if summary, _ := spanAttr(s, "db.query.summary"); summary.AsString() != s.Name() {
+			t.Fatalf("%s span is named %q but its db.query.summary is %q", system.AsString(), s.Name(), summary.AsString())
+		}
 		switch system.AsString() {
 		case "postgresql":
 			postgres++
-			required = append(required, "db.query.summary", "db.collection.name")
-			if summary, _ := spanAttr(s, "db.query.summary"); summary.AsString() != s.Name() {
-				t.Fatalf("postgres span is named %q but its db.query.summary is %q", s.Name(), summary.AsString())
-			}
+			required = append(required, "db.collection.name")
 		case "redis":
 			redis++
 		}
@@ -583,5 +589,23 @@ func TestNewCheckoutFlowIsEvaluatedPerUserAndCostsAQuery(t *testing.T) {
 	}
 	if ratio := float64(treatment) / 300; ratio < 0.2 || ratio > 0.4 {
 		t.Fatalf("treatment ratio %.2f, want about 0.3", ratio)
+	}
+}
+
+func TestEnvironmentDoesNotRenameTheSimulatedServices(t *testing.T) {
+	t.Setenv("OTEL_SERVICE_NAME", "from-env")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=from-env-attrs,team.cost_center=cc-42")
+	rng := rand.New(rand.NewPCG(1, 2))
+	for _, id := range []serviceIdentity{checkoutIdentity, paymentsIdentity} {
+		res, err := instanceResource(context.Background(), replicaResources(id, testDeployment, rng)[0].resource)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := serviceOf(res); got != id.name {
+			t.Fatalf("service.name = %q, want %q", got, id.name)
+		}
+		if got := resourceAttr(res, "team.cost_center"); got != "cc-42" {
+			t.Fatalf("OTEL_RESOURCE_ATTRIBUTES was not applied: team.cost_center = %q", got)
+		}
 	}
 }
