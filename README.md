@@ -126,9 +126,31 @@ docker run --rm -e OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 
 | `--region` | `us-east-1` | `cloud.region`; zones are `<region>a`, `b` and `c` |
 | `--duration` | `0` | how long to run; `0` runs until SIGTERM |
 | `--seed` | `0` | random seed; `0` uses the clock |
+| `--incident-after` | `0` | start an incident this long after the run starts; `0` for none |
+| `--incident-kind` | `errors` | `errors`, `latency` or `drop`; see Incidents |
+| `--incident-duration` | `10m` | how long an incident lasts |
+| `--incident-every` | `0` | repeat the incident this often; `0` runs it once |
 
 The exporters read the standard `OTEL_EXPORTER_OTLP_*` variables. They send OTLP gRPC to `localhost:4317`
 by default, and an `http://` endpoint means no TLS.
+
+### Incidents
+
+An incident is a window in which the shop misbehaves, so an anomaly detector or an alert rule has something to
+find and then something to see recover. It starts `--incident-after` the run starts, lasts `--incident-duration`,
+and repeats every `--incident-every` if that is set. The generator logs when one starts and ends.
+
+| `--incident-kind` | What changes while it lasts |
+|---|---|
+| `errors` | the payment gateway times out on 90% of charges instead of `--error-ratio` |
+| `latency` | every payment gateway call takes 2–3 s longer, so payments' server spans and checkout's do too |
+| `drop` | 90% of checkouts never happen, as if shoppers couldn't reach the site |
+
+For example, a ten-minute burst of payment errors fifteen minutes in, then every hour:
+
+```bash
+correlated-telemetrygen --incident-after 15m --incident-duration 10m --incident-every 1h --incident-kind errors
+```
 
 ## Checking the telemetry schema
 

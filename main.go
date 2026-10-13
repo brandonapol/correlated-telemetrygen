@@ -47,6 +47,14 @@ func main() {
 	region := flag.String("region", "us-east-1", "cloud.region of the simulated cluster")
 	duration := flag.Duration("duration", 0, "how long to run; 0 runs until interrupted")
 	seed := flag.Uint64("seed", 0, "random seed; 0 picks one from the clock")
+	inc := incident{}
+	flag.Func("incident-kind", "errors, latency or drop (default errors)", func(v string) error {
+		inc.kind = incidentKind(v)
+		return nil
+	})
+	flag.DurationVar(&inc.after, "incident-after", 0, "start an incident this long after the run starts; 0 for none")
+	flag.DurationVar(&inc.duration, "incident-duration", 10*time.Minute, "how long an incident lasts")
+	flag.DurationVar(&inc.every, "incident-every", 0, "repeat the incident this often; 0 runs it once")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -56,6 +64,12 @@ func main() {
 	}
 	if *rate <= 0 || *errorRatio < 0 || *errorRatio > 1 || *dbErrorRatio < 0 || *dbErrorRatio > 1 {
 		log.Fatal("--rate must be positive, and --error-ratio and --db-error-ratio between 0 and 1")
+	}
+	if inc.kind == "" {
+		inc.kind = incidentErrors
+	}
+	if err := inc.validate(); err != nil {
+		log.Fatal(err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -94,16 +108,32 @@ func main() {
 
 	log.Printf("correlated-telemetrygen %s: %.2g checkout requests/s, %.0f%% payment errors, %.0f%% database errors",
 		version, *rate, *errorRatio*100, *dbErrorRatio*100)
+	if inc.after > 0 {
+		log.Printf("%s incident after %s, lasting %s, every %s", inc.kind, inc.after, inc.duration, inc.every)
+	}
 	ticker := time.NewTicker(time.Duration(float64(time.Second) / *rate))
 	defer ticker.Stop()
+	started := time.Now()
 	sent := 0
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break loop
-		case <-ticker.C:
-			sim.run(context.Background(), time.Now())
+		case now := <-ticker.C:
+			elapsed := now.Sub(started)
+			if kind := inc.at(elapsed); kind != sim.incident {
+				if kind == "" {
+					log.Printf("%s incident over", sim.incident)
+				} else {
+					log.Printf("%s incident started", kind)
+				}
+				sim.incident = kind
+			}
+			if inc.drops(elapsed, rng.Float64()) {
+				continue
+			}
+			sim.run(context.Background(), now)
 			sent++
 		}
 	}
