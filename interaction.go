@@ -31,6 +31,7 @@ type simulator struct {
 	payments []instance
 	rng      *rand.Rand
 	sessions map[string]*session
+	incident incidentKind // under way now, or ""
 }
 
 type simConfig struct {
@@ -435,7 +436,11 @@ var paymentProviders = []paymentProvider{
 // payments server span with its own gateway call and logs. It reports whether the charge
 // succeeded and, if not, the error type.
 func (s *simulator) charge(ctx context.Context, checkout instance, c *clock, req request, orderID string) (bool, string) {
-	fail := s.rng.Float64() < s.errorRatio
+	errorRatio := s.errorRatio
+	if s.incident == incidentErrors {
+		errorRatio = incidentErrorRatio
+	}
+	fail := s.rng.Float64() < errorRatio
 	payments := s.pick(s.payments)
 	ctx, call := checkout.tracer.Start(ctx, "POST /api/v1/charge", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithTimestamp(c.now), trace.WithAttributes(
@@ -489,8 +494,12 @@ func (s *simulator) charge(ctx context.Context, checkout instance, c *clock, req
 			attribute.String("network.protocol.version", "2"),
 		))
 	status, outcome, errorType := 200, "success", ""
+	var slow time.Duration
+	if s.incident == incidentLatency {
+		slow = s.between(2*time.Second, 3*time.Second)
+	}
 	if fail {
-		gwEnd := c.advance(s.between(800*time.Millisecond, 950*time.Millisecond))
+		gwEnd := c.advance(slow + s.between(800*time.Millisecond, 950*time.Millisecond))
 		gw.SetAttributes(attribute.String("error.type", "GatewayTimeout"))
 		gw.SetStatus(codes.Error, "gateway timeout")
 		gw.End(trace.WithTimestamp(gwEnd))
@@ -499,7 +508,7 @@ func (s *simulator) charge(ctx context.Context, checkout instance, c *clock, req
 			append(payment, attribute.String("error.type", errorType))...)
 	} else {
 		gw.SetAttributes(attribute.Int("http.response.status_code", 200))
-		gw.End(trace.WithTimestamp(c.advance(s.between(30*time.Millisecond, 110*time.Millisecond))))
+		gw.End(trace.WithTimestamp(c.advance(slow + s.between(30*time.Millisecond, 110*time.Millisecond))))
 	}
 
 	end := c.advance(s.between(time.Millisecond, 3*time.Millisecond))
