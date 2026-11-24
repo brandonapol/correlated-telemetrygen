@@ -2,7 +2,7 @@ module github.com/brandonapol/correlated-telemetrygen
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.4
 
 require (
 	go.opentelemetry.io/otel v1.47.0
